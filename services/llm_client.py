@@ -92,7 +92,23 @@ content_type 코드:
         # 기본값
         return {"area": destination, "keyword": preferences.get("theme", "관광")}
 
-    async def parse_travel_query(self, query: str) -> dict:
+    async def mcp_query(self, query: str, area_code: Optional[str] = None, sigungu_code: Optional[str] = None) -> dict:
+        """MCP 엔드포인트로 자연어 쿼리 + area 정보 전달"""
+        async with httpx.AsyncClient(timeout=60) as client:
+            payload = {"query": query}
+            if area_code:
+                payload["area_code"] = area_code
+            if sigungu_code:
+                payload["sigungu_code"] = sigungu_code
+
+            response = await client.post(
+                f"{self.base_url}/v1/mcp/query",
+                json=payload
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def parse_travel_query(self, query: str, area_code: Optional[str] = None, sigungu_code: Optional[str] = None) -> dict:
         """자연어 여행 질의를 파라미터로 파싱"""
         system_prompt = """당신은 여행 질의 분석 전문가입니다.
 사용자의 자연어 여행 요청을 분석하여 검색에 필요한 정보를 추출합니다.

@@ -75,11 +75,17 @@ class RecommendResponse(BaseModel):
 
 class AskRequest(BaseModel):
     query: str  # "강릉 바다 근처 맛집이랑 카페 추천해줘"
+    area_code: Optional[str] = None      # 모바일에서 선택한 도 (예: "32" for 강원)
+    sigungu_code: Optional[str] = None   # 모바일에서 선택한 시/군/구
 
     model_config = {
         "json_schema_extra": {
             "examples": [
-                {"query": "강릉 바다 근처 맛집이랑 카페 추천해줘"}
+                {
+                    "query": "바다 근처 맛집이랑 카페 추천해줘",
+                    "area_code": "32",
+                    "sigungu_code": "1"
+                }
             ]
         }
     }
