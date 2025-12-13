@@ -112,3 +112,42 @@ class AskResponse(BaseModel):
     curated_course: Optional[CuratedCourse] = None  # LLM 큐레이션 결과
     raw_courses: list[Course] = []                   # 원본 API 결과 (백업)
     message: str
+
+
+# === PhotoCard API ===
+
+class PhotoCardCreate(BaseModel):
+    user_id: Optional[str] = None
+    province: str
+    city: str
+    message: Optional[str] = None
+    hashtags: Optional[list[str]] = None
+    ai_quote: Optional[str] = None
+    image_path: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "province": "강원도",
+                    "city": "강릉시",
+                    "message": "강릉에서의 특별한 하루",
+                    "hashtags": ["맛집탐방", "카페투어", "해변산책"],
+                    "ai_quote": "사랑하는 사람과 함께하는 모든 순간이 기적이 됩니다"
+                }
+            ]
+        }
+    }
+
+
+class PhotoCardResponse(BaseModel):
+    id: str
+    province: str
+    city: str
+    message: Optional[str]
+    hashtags: Optional[list[str]]
+    ai_quote: Optional[str]
+    created_at: str
+    is_active: bool
+
+    model_config = {"from_attributes": True}

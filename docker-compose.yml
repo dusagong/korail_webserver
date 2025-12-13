@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: travel-server-db
+    environment:
+      POSTGRES_DB: travel_db
+      POSTGRES_USER: travel_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U travel_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  travel-server:
+    build: .
+    container_name: travel-server-app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://travel_user:${DB_PASSWORD}@postgres:5432/travel_db
+      - LLM_BASE_URL=${LLM_BASE_URL}
+      - TOUR_API_KEY=${TOUR_API_KEY}
+      - KORSERVICE_URL=${KORSERVICE_URL}
+      - TARRLTE_URL=${TARRLTE_URL}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

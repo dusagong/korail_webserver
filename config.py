@@ -16,8 +16,12 @@ class Settings(BaseSettings):
     korservice_url: str
     tarrlte_url: str
 
+    # Database
+    database_url: str = "postgresql+asyncpg://travel_user:password@localhost:5432/travel_db"
+
     class Config:
         env_file = ".env"
+        extra = "ignore"  # .env의 추가 필드 무시 (DB_PASSWORD 등)
 
 
 @lru_cache
