@@ -6,7 +6,7 @@
 import asyncio
 from typing import Optional
 from database import AsyncSessionLocal
-from crud import session_crud
+from crud import update_session_status
 from services.llm_client import LLMClient
 
 
@@ -26,7 +26,7 @@ async def process_recommendation_background(
     async with AsyncSessionLocal() as db:
         try:
             # 1. 상태 업데이트: processing
-            await session_crud.update_session_status(db, session_id, "processing")
+            await update_session_status(db, session_id, "processing")
             print(f"[Recommendation] Session {session_id}: processing started")
 
             # 2. LLM MCP 쿼리 실행
@@ -48,7 +48,7 @@ async def process_recommendation_background(
                     "selected_tools": mcp_result.get("selected_tools", []),
                 }
 
-                await session_crud.update_session_status(
+                await update_session_status(
                     db,
                     session_id,
                     "completed",
@@ -57,7 +57,7 @@ async def process_recommendation_background(
                 print(f"[Recommendation] Session {session_id}: completed with {len(recommendation_data.get('spots', []))} spots")
             else:
                 error_msg = mcp_result.get("error", "추천 요청 실패")
-                await session_crud.update_session_status(
+                await update_session_status(
                     db,
                     session_id,
                     "failed",
@@ -69,7 +69,7 @@ async def process_recommendation_background(
             print(f"[Recommendation] Session {session_id}: exception - {str(e)}")
             # DB 세션 재생성 (예외 발생 시)
             async with AsyncSessionLocal() as db2:
-                await session_crud.update_session_status(
+                await update_session_status(
                     db2,
                     session_id,
                     "failed",
