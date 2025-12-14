@@ -94,7 +94,7 @@ content_type 코드:
 
     async def mcp_query(self, query: str, area_code: Optional[str] = None, sigungu_code: Optional[str] = None) -> dict:
         """MCP 엔드포인트로 자연어 쿼리 + area 정보 전달"""
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=300) as client:  # 5분 (MCP + LLM 처리시간)
             payload = {"query": query}
             if area_code:
                 payload["area_code"] = area_code

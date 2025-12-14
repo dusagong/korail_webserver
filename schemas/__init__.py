@@ -10,4 +10,8 @@ from .models import (
     AskResponse,
     CuratedSpot,
     CuratedCourse,
+    # 새 추천 API 모델
+    SpotWithLocation,
+    CourseStop,
+    RecommendedCourse,
 )

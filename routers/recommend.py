@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException
 
-from schemas import RecommendRequest, RecommendResponse, Course, Spot, AskRequest, AskResponse, CuratedCourse, CuratedSpot
+from schemas import (
+    RecommendRequest, RecommendResponse, Course, Spot,
+    AskRequest, AskResponse, SpotWithLocation, CourseStop, RecommendedCourse
+)
 from services import LLMClient, TourAPIService
 
 router = APIRouter(prefix="/api/v1", tags=["recommend"])
@@ -132,97 +135,98 @@ async def ask_travel(request: AskRequest):
     """
     자연어로 여행 추천 요청 (MCP 통합)
 
-    - **query**: 자연어 질의 (예: "바다 근처 맛집이랑 카페 추천해줘")
+    - **query**: 자연어 질의 (예: "바닷가 근처에서 바다뷰 보이는 카페에 갔다가 저녁은 삼겹살을 먹고싶어")
     - **area_code**: 모바일에서 선택한 도 코드 (예: "32" for 강원)
     - **sigungu_code**: 모바일에서 선택한 시/군/구 코드 (선택)
+
+    응답 구조:
+    - **spots**: 리스트 뷰용 (전체 검색 결과, 지도 좌표 포함)
+    - **course**: 코스 뷰용 (LLM이 큐레이션한 동선)
     """
     llm = LLMClient()
 
-    # MCP 엔드포인트로 쿼리 + area 정보 전달
     try:
+        # MCP 엔드포인트로 쿼리 + area 정보 전달
         mcp_result = await llm.mcp_query(
             query=request.query,
             area_code=request.area_code,
             sigungu_code=request.sigungu_code
         )
 
-        print(f"[DEBUG] MCP result: {mcp_result}")  # 디버그 로그
+        print(f"[DEBUG] MCP result keys: {mcp_result.keys()}")
 
-        # MCP 응답 파싱
-        curated_data = mcp_result.get("curated_course")
-        selected_tools = mcp_result.get("selected_tools", [])
-        raw_results = mcp_result.get("raw_results", [])
+        # 성공 여부 확인
+        if not mcp_result.get("success", False):
+            return AskResponse(
+                success=False,
+                query=request.query,
+                area_code=request.area_code,
+                sigungu_code=request.sigungu_code,
+                spots=[],
+                course=None,
+                message=mcp_result.get("error", "추천 요청 실패")
+            )
 
-        # 추출된 파라미터 (LLM이 분석한 정보)
-        extracted_params = {}
-        if selected_tools:
-            # 첫 번째 도구의 arguments에서 파라미터 추출
-            extracted_params = selected_tools[0].get("arguments", {})
+        # spots 변환 (리스트 뷰용)
+        spots = []
+        for s in mcp_result.get("spots", []):
+            spots.append(SpotWithLocation(
+                name=s.get("name", ""),
+                address=s.get("address"),
+                category=s.get("category"),
+                image_url=s.get("image_url"),
+                mapx=s.get("mapx"),
+                mapy=s.get("mapy"),
+                tel=s.get("tel"),
+                content_id=s.get("content_id")
+            ))
 
-        # 큐레이션된 코스 변환
-        curated_course = None
-        if curated_data and curated_data.get("spots"):
-            curated_spots = [
-                CuratedSpot(
-                    name=s.get("name", ""),
-                    time=s.get("time"),
-                    duration=s.get("duration"),
-                    reason=s.get("reason"),
-                    tip=s.get("tip")
-                )
-                for s in curated_data.get("spots", [])
-            ]
+        # course 변환 (코스 뷰용)
+        course = None
+        course_data = mcp_result.get("course")
+        if course_data and course_data.get("stops"):
+            stops = []
+            for stop in course_data.get("stops", []):
+                stops.append(CourseStop(
+                    order=stop.get("order", 0),
+                    name=stop.get("name", ""),
+                    address=stop.get("address"),
+                    mapx=stop.get("mapx"),
+                    mapy=stop.get("mapy"),
+                    content_id=stop.get("content_id"),
+                    category=stop.get("category"),
+                    time=stop.get("time"),
+                    duration=stop.get("duration"),
+                    reason=stop.get("reason"),
+                    tip=stop.get("tip")
+                ))
 
-            if curated_spots:
-                curated_course = CuratedCourse(
-                    course_title=curated_data.get("course_title", "추천 여행 코스"),
-                    spots=curated_spots,
-                    overall_tip=curated_data.get("overall_tip"),
-                    summary=curated_data.get("summary")
-                )
-
-        # 원본 데이터로부터 백업 코스 생성
-        raw_courses = []
-        if raw_results:
-            # raw_results는 MCP tool 실행 결과들
-            # 간단한 백업 코스 생성
-            for result in raw_results[:1]:  # 첫 번째 결과만 사용
-                items = result.get("result", {}).get("response", {}).get("body", {}).get("items", {}).get("item", [])
-                if items:
-                    spots = []
-                    for item in items[:5]:  # 최대 5개
-                        spots.append(Spot(
-                            name=item.get("title", "이름없음"),
-                            address=item.get("addr1", ""),
-                            category="MCP 검색 결과",
-                            description=item.get("overview", "")[:200] if item.get("overview") else ""
-                        ))
-
-                    if spots:
-                        raw_courses.append(Course(
-                            title="MCP 기본 검색 결과",
-                            spots=spots,
-                            summary="LLM이 선택한 도구로 검색한 결과"
-                        ))
-
-        destination = extracted_params.get("area_code", request.area_code or "미정")
+            course = RecommendedCourse(
+                title=course_data.get("title", "추천 여행 코스"),
+                stops=stops,
+                total_duration=course_data.get("total_duration"),
+                summary=course_data.get("summary")
+            )
 
         return AskResponse(
-            destination=destination,
-            extracted_params=extracted_params,
-            curated_course=curated_course,
-            raw_courses=raw_courses,
-            message=f"MCP 기반 맞춤 추천입니다."
+            success=True,
+            query=request.query,
+            area_code=request.area_code,
+            sigungu_code=request.sigungu_code,
+            spots=spots,
+            course=course,
+            message=mcp_result.get("message", f"{len(spots)}개의 장소를 찾았습니다.")
         )
 
     except Exception as e:
-        print(f"[ERROR] MCP query 실패: {e}")  # 에러 로그
+        print(f"[ERROR] MCP query 실패: {e}")
 
-        # MCP 실패시 에러 응답
         return AskResponse(
-            destination=request.area_code or "미정",
-            extracted_params={},
-            curated_course=None,
-            raw_courses=[],
-            message=f"MCP 서버 오류: {str(e)}"
+            success=False,
+            query=request.query,
+            area_code=request.area_code,
+            sigungu_code=request.sigungu_code,
+            spots=[],
+            course=None,
+            message=f"서버 오류: {str(e)}"
         )
