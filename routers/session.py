@@ -139,6 +139,8 @@ async def get_session_recommendation(
                     category=stop.get("category"),
                     time=stop.get("time"),
                     duration=stop.get("duration"),
+                    travel_time_to_next=stop.get("travel_time_to_next"),
+                    distance_to_next_km=stop.get("distance_to_next_km"),
                     reason=stop.get("reason"),
                     tip=stop.get("tip")
                 ))
@@ -147,6 +149,7 @@ async def get_session_recommendation(
                 title=course_data.get("title", "추천 여행 코스"),
                 stops=stops,
                 total_duration=course_data.get("total_duration"),
+                total_distance_km=course_data.get("total_distance_km"),
                 summary=course_data.get("summary")
             )
 

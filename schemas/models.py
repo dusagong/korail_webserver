@@ -114,6 +114,8 @@ class CourseStop(BaseModel):
     category: Optional[str] = None       # 카페/음식점/관광지/숙박
     time: Optional[str] = None           # "오전 10시"
     duration: Optional[str] = None       # "1시간"
+    travel_time_to_next: Optional[str] = None     # "다음 장소까지 약 10분"
+    distance_to_next_km: Optional[float] = None   # 다음 장소까지 실제 거리 (km)
     reason: Optional[str] = None         # 커플에게 추천하는 이유
     tip: Optional[str] = None            # 방문 팁
 
@@ -123,6 +125,7 @@ class RecommendedCourse(BaseModel):
     title: str                           # "강릉 바다향 데이트 코스"
     stops: list[CourseStop]              # 순서대로 정렬된 정차지들
     total_duration: Optional[str] = None # "약 6시간"
+    total_distance_km: Optional[float] = None  # 총 이동 거리 (km)
     summary: Optional[str] = None        # 코스 요약 (커플 여행 관점)
 
 
