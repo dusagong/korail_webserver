@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import hashtag_router, recommend_router, photo_card_router, session_router
+from routers import hashtag_router, recommend_router, photo_card_router, session_router, review_router
 
 settings = get_settings()
 
@@ -42,18 +42,20 @@ app.include_router(hashtag_router)
 app.include_router(recommend_router)
 app.include_router(photo_card_router)
 app.include_router(session_router)
+app.include_router(review_router)
 
 
 @app.get("/")
 async def root():
     return {
         "service": settings.app_name,
-        "version": "0.3.0",
+        "version": "0.4.0",
         "endpoints": {
             "hashtag": "/api/v1/hashtag",
             "recommend": "/api/v1/recommend",
             "photo_cards": "/api/v1/photo_cards",
             "sessions": "/api/v1/sessions",
+            "reviews": "/api/v1/reviews",
             "docs": "/docs",
         }
     }

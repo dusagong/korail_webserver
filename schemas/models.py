@@ -218,3 +218,74 @@ class SessionRecommendationResponse(BaseModel):
     message: str
     created_at: Optional[str] = None
     completed_at: Optional[str] = None
+
+
+# === Review API ===
+
+class ReviewImageResponse(BaseModel):
+    """리뷰 이미지 응답"""
+    id: str
+    image_url: str
+    image_order: int
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewCreate(BaseModel):
+    """리뷰 생성 요청 (이미지는 별도 multipart로 전송)"""
+    place_id: str
+    place_name: str
+    rating: int  # 1~5
+    content: str
+    user_id: Optional[str] = None
+    photo_card_id: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "place_id": "12345",
+                    "place_name": "강릉 해변 카페",
+                    "rating": 5,
+                    "content": "바다 뷰가 정말 예쁘고 커피도 맛있었어요!",
+                    "user_id": "user123"
+                }
+            ]
+        }
+    }
+
+
+class ReviewUpdate(BaseModel):
+    """리뷰 수정 요청"""
+    rating: Optional[int] = None
+    content: Optional[str] = None
+
+
+class ReviewResponse(BaseModel):
+    """리뷰 응답"""
+    id: str
+    place_id: str
+    place_name: str
+    rating: int
+    content: str
+    user_id: Optional[str] = None
+    photo_card_id: Optional[str] = None
+    image_urls: list[str] = []  # 이미지 URL 리스트
+    created_at: str
+    updated_at: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewListResponse(BaseModel):
+    """리뷰 목록 응답"""
+    reviews: list[ReviewResponse]
+    total_count: int
+    average_rating: float
+
+
+class PlaceRatingResponse(BaseModel):
+    """장소 평점 응답"""
+    place_id: str
+    average_rating: float
+    review_count: int

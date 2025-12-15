@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://travel_user:password@localhost:5432/travel_db"
 
+    # AWS S3
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_region: str = "ap-northeast-2"
+    s3_bucket_name: str = "travel-reviews"
+
     class Config:
         env_file = ".env"
         extra = "ignore"  # .env의 추가 필드 무시 (DB_PASSWORD 등)

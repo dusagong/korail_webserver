@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
 import uuid
@@ -54,3 +55,49 @@ class MeetingPlatformSession(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+
+class Review(Base):
+    """
+    리뷰 테이블 - 장소별 사용자 리뷰
+    """
+    __tablename__ = "reviews"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    place_id = Column(String(100), nullable=False, index=True)  # 관광 API content_id 또는 커스텀
+    place_name = Column(String(200), nullable=False)
+    rating = Column(Integer, nullable=False)  # 1~5
+    content = Column(Text, nullable=False)
+    user_id = Column(String(100), nullable=True, index=True)
+    photo_card_id = Column(
+        String(36),
+        ForeignKey("photo_cards.id", ondelete="SET NULL"),
+        nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    is_deleted = Column(Boolean, default=False)
+
+    # Relationship
+    images = relationship("ReviewImage", back_populates="review", cascade="all, delete-orphan")
+
+
+class ReviewImage(Base):
+    """
+    리뷰 이미지 테이블 - S3 URL 저장
+    """
+    __tablename__ = "review_images"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    review_id = Column(
+        String(36),
+        ForeignKey("reviews.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    image_url = Column(String(500), nullable=False)  # S3 URL
+    image_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationship
+    review = relationship("Review", back_populates="images")
