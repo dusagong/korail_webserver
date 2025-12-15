@@ -1,8 +1,44 @@
+import logging
+import sys
+from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from routers import hashtag_router, recommend_router, photo_card_router, session_router, review_router
+
+# ========== 로깅 설정 ==========
+# 포맷 설정: 시간 | 레벨 | 로거명 | 메시지
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)-15s | %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+# 루트 로거 설정
+logging.basicConfig(
+    level=logging.DEBUG,
+    format=LOG_FORMAT,
+    datefmt=LOG_DATE_FORMAT,
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # 콘솔 출력
+    ]
+)
+
+# 각 모듈별 로거 레벨 설정
+logging.getLogger("recommend").setLevel(logging.DEBUG)
+logging.getLogger("session").setLevel(logging.DEBUG)
+logging.getLogger("llm_client").setLevel(logging.DEBUG)
+logging.getLogger("photo_card").setLevel(logging.DEBUG)
+
+# 외부 라이브러리 로그 레벨 조절 (너무 많으면 INFO로)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("uvicorn").setLevel(logging.INFO)
+logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+
+logger = logging.getLogger("main")
+logger.info("=" * 60)
+logger.info(f"Travel Server 시작: {datetime.now().isoformat()}")
+logger.info("=" * 60)
 
 settings = get_settings()
 

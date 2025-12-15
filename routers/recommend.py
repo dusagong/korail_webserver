@@ -1,3 +1,7 @@
+import logging
+import time
+import json
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 
 from schemas import (
@@ -5,6 +9,10 @@ from schemas import (
     AskRequest, AskResponse, SpotWithLocation, CourseStop, RecommendedCourse
 )
 from services import LLMClient, TourAPIService
+
+# 로거 설정
+logger = logging.getLogger("recommend")
+logger.setLevel(logging.DEBUG)
 
 router = APIRouter(prefix="/api/v1", tags=["recommend"])
 
@@ -143,20 +151,40 @@ async def ask_travel(request: AskRequest):
     - **spots**: 리스트 뷰용 (전체 검색 결과, 지도 좌표 포함)
     - **course**: 코스 뷰용 (LLM이 큐레이션한 동선)
     """
+    request_id = f"ask_{int(time.time() * 1000)}"
+    start_time = time.time()
+
+    logger.info("=" * 60)
+    logger.info(f"[{request_id}] /ask 요청 시작")
+    logger.info(f"[{request_id}] 시간: {datetime.now().isoformat()}")
+    logger.info(f"[{request_id}] 쿼리: {request.query}")
+    logger.info(f"[{request_id}] area_code: {request.area_code}")
+    logger.info(f"[{request_id}] sigungu_code: {request.sigungu_code}")
+    logger.info("=" * 60)
+
     llm = LLMClient()
 
     try:
         # MCP 엔드포인트로 쿼리 + area 정보 전달
+        logger.info(f"[{request_id}] MCP 서버로 요청 전송 중...")
+        mcp_start = time.time()
+
         mcp_result = await llm.mcp_query(
             query=request.query,
             area_code=request.area_code,
             sigungu_code=request.sigungu_code
         )
 
-        print(f"[DEBUG] MCP result keys: {mcp_result.keys()}")
+        mcp_elapsed = time.time() - mcp_start
+        logger.info(f"[{request_id}] MCP 응답 수신 (소요시간: {mcp_elapsed:.2f}초)")
+        logger.debug(f"[{request_id}] MCP result keys: {mcp_result.keys()}")
 
         # 성공 여부 확인
         if not mcp_result.get("success", False):
+            error_msg = mcp_result.get("error", "추천 요청 실패")
+            logger.warning(f"[{request_id}] MCP 실패 응답: {error_msg}")
+            elapsed = time.time() - start_time
+            logger.info(f"[{request_id}] /ask 요청 종료 (실패, 총 소요시간: {elapsed:.2f}초)")
             return AskResponse(
                 success=False,
                 query=request.query,
@@ -164,10 +192,11 @@ async def ask_travel(request: AskRequest):
                 sigungu_code=request.sigungu_code,
                 spots=[],
                 course=None,
-                message=mcp_result.get("error", "추천 요청 실패")
+                message=error_msg
             )
 
         # spots 변환 (리스트 뷰용)
+        logger.info(f"[{request_id}] spots 변환 시작 (원본 개수: {len(mcp_result.get('spots', []))})")
         spots = []
         for s in mcp_result.get("spots", []):
             spots.append(SpotWithLocation(
@@ -180,11 +209,16 @@ async def ask_travel(request: AskRequest):
                 tel=s.get("tel"),
                 content_id=s.get("content_id")
             ))
+        logger.info(f"[{request_id}] spots 변환 완료: {len(spots)}개")
+        for i, spot in enumerate(spots[:5]):  # 처음 5개만 로그
+            logger.debug(f"[{request_id}]   - spot[{i}]: {spot.name} ({spot.category})")
 
         # course 변환 (코스 뷰용)
         course = None
         course_data = mcp_result.get("course")
+        logger.info(f"[{request_id}] course 데이터 존재: {course_data is not None}")
         if course_data and course_data.get("stops"):
+            logger.info(f"[{request_id}] course stops 변환 시작 (원본 개수: {len(course_data.get('stops', []))})")
             stops = []
             for stop in course_data.get("stops", []):
                 stops.append(CourseStop(
@@ -211,6 +245,22 @@ async def ask_travel(request: AskRequest):
                 summary=course_data.get("summary")
             )
 
+            logger.info(f"[{request_id}] course 변환 완료:")
+            logger.info(f"[{request_id}]   - 제목: {course.title}")
+            logger.info(f"[{request_id}]   - 정차지 수: {len(stops)}")
+            logger.info(f"[{request_id}]   - 총 소요시간: {course.total_duration}")
+            logger.info(f"[{request_id}]   - 총 거리: {course.total_distance_km}km")
+            for i, s in enumerate(stops):
+                logger.debug(f"[{request_id}]   - stop[{i}]: {s.order}. {s.name} ({s.category}) - 다음까지 {s.distance_to_next_km}km")
+
+        # 최종 응답
+        elapsed = time.time() - start_time
+        logger.info("=" * 60)
+        logger.info(f"[{request_id}] /ask 요청 완료 (성공)")
+        logger.info(f"[{request_id}] 총 소요시간: {elapsed:.2f}초")
+        logger.info(f"[{request_id}] 응답 spots: {len(spots)}개, course: {'있음' if course else '없음'}")
+        logger.info("=" * 60)
+
         return AskResponse(
             success=True,
             query=request.query,
@@ -222,7 +272,15 @@ async def ask_travel(request: AskRequest):
         )
 
     except Exception as e:
-        print(f"[ERROR] MCP query 실패: {e}")
+        elapsed = time.time() - start_time
+        logger.error("=" * 60)
+        logger.error(f"[{request_id}] /ask 요청 실패 (예외 발생)")
+        logger.error(f"[{request_id}] 에러 타입: {type(e).__name__}")
+        logger.error(f"[{request_id}] 에러 메시지: {str(e)}")
+        logger.error(f"[{request_id}] 총 소요시간: {elapsed:.2f}초")
+        logger.error("=" * 60)
+        import traceback
+        logger.error(f"[{request_id}] 스택 트레이스:\n{traceback.format_exc()}")
 
         return AskResponse(
             success=False,

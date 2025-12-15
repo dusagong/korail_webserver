@@ -1,7 +1,13 @@
 import httpx
 import json
+import logging
+import time
 from typing import Optional
 from config import get_settings
+
+# 로거 설정
+logger = logging.getLogger("llm_client")
+logger.setLevel(logging.DEBUG)
 
 
 class LLMClient:
@@ -94,6 +100,14 @@ content_type 코드:
 
     async def mcp_query(self, query: str, area_code: Optional[str] = None, sigungu_code: Optional[str] = None) -> dict:
         """MCP 엔드포인트로 자연어 쿼리 + area 정보 전달"""
+        request_id = f"mcp_{int(time.time() * 1000)}"
+        start_time = time.time()
+
+        logger.info(f"[{request_id}] MCP 쿼리 시작")
+        logger.info(f"[{request_id}] LLM 서버 URL: {self.base_url}")
+        logger.info(f"[{request_id}] 쿼리: {query}")
+        logger.info(f"[{request_id}] area_code: {area_code}, sigungu_code: {sigungu_code}")
+
         async with httpx.AsyncClient(timeout=600) as client:  # 10분 (MCP + LLM 처리시간 - 느린 응답 대응)
             payload = {"query": query}
             if area_code:
@@ -101,12 +115,54 @@ content_type 코드:
             if sigungu_code:
                 payload["sigungu_code"] = sigungu_code
 
-            response = await client.post(
-                f"{self.base_url}/v1/mcp/query",
-                json=payload
-            )
-            response.raise_for_status()
-            return response.json()
+            logger.debug(f"[{request_id}] 요청 payload: {json.dumps(payload, ensure_ascii=False)}")
+
+            try:
+                logger.info(f"[{request_id}] HTTP POST 요청 전송 중...")
+                response = await client.post(
+                    f"{self.base_url}/v1/mcp/query",
+                    json=payload
+                )
+
+                elapsed = time.time() - start_time
+                logger.info(f"[{request_id}] HTTP 응답 수신 (status: {response.status_code}, 소요시간: {elapsed:.2f}초)")
+
+                response.raise_for_status()
+
+                result = response.json()
+
+                # 응답 요약 로그
+                logger.info(f"[{request_id}] MCP 응답 파싱 완료:")
+                logger.info(f"[{request_id}]   - success: {result.get('success')}")
+                logger.info(f"[{request_id}]   - spots 개수: {len(result.get('spots', []))}")
+                logger.info(f"[{request_id}]   - course 존재: {result.get('course') is not None}")
+                if result.get('course'):
+                    course = result['course']
+                    logger.info(f"[{request_id}]   - course.title: {course.get('title')}")
+                    logger.info(f"[{request_id}]   - course.stops 개수: {len(course.get('stops', []))}")
+                    logger.info(f"[{request_id}]   - course.total_distance_km: {course.get('total_distance_km')}")
+                logger.info(f"[{request_id}]   - message: {result.get('message')}")
+
+                return result
+
+            except httpx.TimeoutException as e:
+                elapsed = time.time() - start_time
+                logger.error(f"[{request_id}] MCP 요청 타임아웃 (소요시간: {elapsed:.2f}초)")
+                logger.error(f"[{request_id}] 타임아웃 에러: {str(e)}")
+                raise
+
+            except httpx.HTTPStatusError as e:
+                elapsed = time.time() - start_time
+                logger.error(f"[{request_id}] MCP HTTP 에러 (status: {e.response.status_code}, 소요시간: {elapsed:.2f}초)")
+                logger.error(f"[{request_id}] 응답 내용: {e.response.text[:500]}")
+                raise
+
+            except Exception as e:
+                elapsed = time.time() - start_time
+                logger.error(f"[{request_id}] MCP 요청 실패 (소요시간: {elapsed:.2f}초)")
+                logger.error(f"[{request_id}] 에러 타입: {type(e).__name__}")
+                logger.error(f"[{request_id}] 에러 메시지: {str(e)}")
+                raise
 
     async def parse_travel_query(self, query: str, area_code: Optional[str] = None, sigungu_code: Optional[str] = None) -> dict:
         """자연어 여행 질의를 파라미터로 파싱"""
